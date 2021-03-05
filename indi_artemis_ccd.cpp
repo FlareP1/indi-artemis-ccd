@@ -456,6 +456,8 @@ bool GenericCCD::StartExposure(float duration)
    *
    *
    **********************************************************/
+    unsigned long capture_duration_ms = (unsigned long)(duration * 1000);
+    m_ds->CaptureImage(true, capture_duration_ms);
 
     PrimaryCCD.setExposureDuration(duration);
     ExposureRequest = duration;
@@ -482,6 +484,8 @@ bool GenericCCD::AbortExposure()
    *
    *
    **********************************************************/
+
+    m_ds->AbortExposure();
 
     InExposure = false;
     return true;
@@ -604,6 +608,10 @@ bool GenericCCD::UpdateCCDBin(int binx, int biny)
    *
    *
    **********************************************************/
+    /* Artemis camera only support symetrical binning */
+    binx = max(binx,biny);
+    biny = binx;
+    m_ds->SetFormat(binx);
 
     PrimaryCCD.setBin(binx, biny);
 
@@ -615,6 +623,9 @@ float GenericCCD::CalcTimeLeft()
     double timesince;
     double timeleft;
     struct timeval now;
+    bool exposing;
+    float timeRemaining;
+
     gettimeofday(&now, nullptr);
 
     timesince = (double)(now.tv_sec * 1000.0 + now.tv_usec / 1000) -
@@ -622,7 +633,13 @@ float GenericCCD::CalcTimeLeft()
     timesince = timesince / 1000;
 
     timeleft = ExposureRequest - timesince;
-    return timeleft;
+
+    //This will report the actual time remaining includeing the loading of the image
+    //but intially it will just show exposing at m_timeRemaining is 0
+    //then m_timeRemaining gets set to 100 and decreaeses to 0?
+    m_ds->TimeRemaining(exposing , timeRemaining);
+
+    return max(timeleft,(double)timeRemaining);
 }
 
 /* Downloads the image from the CCD.
@@ -633,7 +650,9 @@ int GenericCCD::grabImage()
     int width      = PrimaryCCD.getSubW() / PrimaryCCD.getBinX() * PrimaryCCD.getBPP() / 8;
     int height     = PrimaryCCD.getSubH() / PrimaryCCD.getBinY();
 
-    /**********************************************************
+    DEBUGF(INDI::Logger::DBG_SESSION, "Internal Image Size w %i h %i\n",width, height);
+
+     /**********************************************************
      *
      *
      *  IMPORRANT: Put here your CCD Get Image routine here
@@ -642,9 +661,52 @@ int GenericCCD::grabImage()
      *
      *
      **********************************************************/
+    
+    wxArtSample *m_pArtSample = new wxArtSample();
+
+    // allow the camcode to get the samples
+    long capResult = m_ds->OnCapture(); // allow the camcode to get the samples
+
+    if(capResult == 0  )
+    {
+        std::cout << "CapturedSample " <<  capResult << " \n";
+        m_ds->CapturedSample(*m_pArtSample);  // we _must_ collect the sample if it is ready
+
+    }
+    
+    //*extract the image from 16bit frame to sudo 8 bit fame
+    // Width is set larger to simulate 16bits
+    uint8_t *cameraImage_ptr = (uint8_t *)m_pArtSample->SampleYPtr();
+    int hSize = m_pArtSample->SampleSize().GetHeight();
+    int wSize = m_pArtSample->SampleSize().GetWidth() * PrimaryCCD.getBPP()/8;
+
+    DEBUGF(INDI::Logger::DBG_SESSION, "Downloaded Image Size w %i h %i\n",wSize ,hSize);
+
+    #if 1
+    for (int i = 0; i < hSize ; i++)
+    {
+        for (int j = 0; j < wSize; j++)
+        {
+            //image[i * width + j] = rand() % 255;
+            image[i * wSize + j] = cameraImage_ptr[i * wSize + j];
+        }
+    }
+    #endif
+
+    //Free the memory from the download.
+    delete m_pArtSample;
+
+#if 0
     for (int i = 0; i < height; i++)
+    {
         for (int j = 0; j < width; j++)
+        {
             image[i * width + j] = rand() % 255;
+        }
+    }
+#endif
+
+
 
     LOG_INFO("Download complete.");
 
@@ -684,8 +746,9 @@ void GenericCCD::TimerHit()
                 }
                 else
                 {
+                    ESYNMode status = m_ds->OnCaptureRequired();
                     //  it's real close now, so spin on it
-                    while (timeleft > 0)
+                    while (status != ESYNMode::ESYN_All )  //Wait until capture and download complete
                     {
                         /**********************************************************
              *
@@ -695,6 +758,9 @@ void GenericCCD::TimerHit()
              *  also return timeleft in msec.
              *
              **********************************************************/
+                        
+                        status = m_ds->OnCaptureRequired();
+                        usleep(1000000 * 0.1f);
 
                         // Breaking in simulation, in real driver either loop until time left = 0 or use an API call to know if the image is ready for download
                         break;
@@ -707,6 +773,15 @@ void GenericCCD::TimerHit()
                     /* We're done exposing */
                     LOG_INFO("Exposure done, downloading image...");
 
+                    long capResult;
+                    do
+                    {
+                        // allow the camcode to get the samples
+                        capResult = m_ds->OnCapture(); // allow the camcode to get the samples
+                        std::cout << "capResult " << capResult << "\n";
+                        sleep(1);
+                    } while (capResult != 0);
+                   
                     PrimaryCCD.setExposureLeft(0);
                     InExposure = false;
                     /* grab and save image */
