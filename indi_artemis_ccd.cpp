@@ -219,7 +219,7 @@ GenericCCD::GenericCCD(ArtBase *m_ds, int deviceIndex, const char *name)
     this->m_ds = m_ds;
     this->deviceIndex = deviceIndex;
 
-    snprintf(this->name, 32, "Generic CCD %s", name);
+    snprintf(this->name, 32, "%s", name);
     setDeviceName(this->name);
 
     setVersion(CDRIVER_VERSION_MAJOR, CDRIVER_VERSION_MINOR);
@@ -239,7 +239,7 @@ GenericCCD::~GenericCCD()
 
 const char *GenericCCD::getDefaultName()
 {
-    return "Generic CCD";
+    return "Artemis CCD";
 }
 
 bool GenericCCD::initProperties()
@@ -356,6 +356,19 @@ bool GenericCCD::setupParams()
    *
    *
    **********************************************************/
+
+    // Now we are connected we can get the Detailed Device Name and Type
+    std::string CamModel;
+    this->m_ds->GetCamModel(CamModel);
+
+    std::string SensorType;
+    this->m_ds->GetCamSensorType(SensorType);
+
+    //LOG_INFO(CamModel.c_str());
+    //LOG_INFO(SensorType.c_str());
+    //snprintf(this->name, 32, "%s / %s", CamModel.c_str(), SensorType.c_str());
+    //setDeviceName(this->name);  Not possible to change this once it has been set?
+    //Causes problems with logging
 
     ///////////////////////////
     // 1. Get Pixel size
