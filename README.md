@@ -2,11 +2,11 @@
 
 An indi driver to allow use of the original Artemis / Atik CCD cameras under indi. 
 
-Disclaimer
+# Disclaimer
 
 The authors regularly use the software on several of their computers and firmly believe that the software is without any damaging effect. Nevertheless, the authors accept no responsibility for damages resulting from use of the software and make no warranty or representation, either express or implied, including but not limited to, any implied warranty of merchantability or fitness for a particular purpose. The software is provided "AS IS" and the authors do not assume or accept any risk by its use.
 
-License
+# License
 
 indi-artemis-ccd - Chris Hewitt Copyright (C) 2021.
 This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
